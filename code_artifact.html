@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>氛圍音效與專注儀表板 - Mood Sound & Focus Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        theme: {
+                            bg: 'var(--bg-color)',
+                            card: 'var(--card-bg)',
+                            text: 'var(--text-color)',
+                            accent: 'var(--accent-color)',
+                            accentHover: 'var(--accent-hover)',
+                            border: 'var(--border-color)',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* CSS Variables for Dynamic Theme Switcher */
+        :root[data-theme="dark"] {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-color: #f8fafc;
+            --accent-color: #6366f1;
+            --accent-hover: #4f46e5;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --particle-color: rgba(99, 102, 241, 0.5);
+        }
+        :root[data-theme="light"] {
+            --bg-color: #f1f5f9;
+            --card-bg: rgba(255, 255, 255, 0.75);
+            --text-color: #0f172a;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --border-color: rgba(0, 0, 0, 0.08);
+            --particle-color: rgba(59, 130, 246, 0.4);
+        }
+        :root[data-theme="cyberpunk"] {
+            --bg-color: #0d0221;
+            --card-bg: rgba(26, 14, 46, 0.8);
+            --text-color: #00f5d4;
+            --accent-color: #f72585;
+            --accent-hover: #b5179e;
+            --border-color: rgba(247, 37, 133, 0.3);
+            --particle-color: rgba(247, 37, 133, 0.6);
+        }
+        :root[data-theme="forest"] {
+            --bg-color: #051c14;
+            --card-bg: rgba(12, 43, 31, 0.75);
+            --text-color: #e2f1e7;
+            --accent-color: #10b981;
+            --accent-hover: #059669;
+            --border-color: rgba(16, 185, 129, 0.2);
+            --particle-color: rgba(16, 185, 129, 0.5);
+        }
+        :root[data-theme="sunset"] {
+            --bg-color: #2b1020;
+            --card-bg: rgba(61, 24, 44, 0.75);
+            --text-color: #ffedd5;
+            --accent-color: #f97316;
+            --accent-hover: #ea580c;
+            --border-color: rgba(249, 115, 22, 0.25);
+            --particle-color: rgba(249, 115, 22, 0.5);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.5s ease, color 0.5s ease;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphism Styles */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            border-color: var(--accent-color);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            height: 6px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-color);
+            transition: transform 0.1s ease;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        /* Breathing Circle Pulse */
+        .breath-circle {
+            transition: transform 4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.5s ease;
+        }
+    </style>
+</head>
+<body class="relative flex flex-col min-h-screen">
+
+    <!-- Interactive Canvas Background -->
+    <canvas id="bgCanvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
+
+    <div class="relative z-10 flex flex-col min-h-screen p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full gap-6">
+
+        <!-- Header & Top Navigation -->
+        <header class="glass-card rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white shadow-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight">氛圍音效與專注儀表板</h1>
+                    <p class="text-xs sm:text-sm opacity-70">Custom Ambient Soundscapes & Focus Productivity</p>
+                </div>
+            </div>
+
+            <!-- Theme Switcher Options -->
+            <div class="flex items-center gap-2 flex-wrap justify-center">
+                <span class="text-xs font-medium opacity-70 mr-1">主題色彩:</span>
+                <button onclick="setTheme('dark')" class="w-7 h-7 rounded-full bg-slate-900 border-2 border-slate-600 hover:scale-110 transition-transform" title="暗夜黑"></button>
+                <button onclick="setTheme('light')" class="w-7 h-7 rounded-full bg-slate-100 border-2 border-slate-300 hover:scale-110 transition-transform" title="極簡白"></button>
+                <button onclick="setTheme('cyberpunk')" class="w-7 h-7 rounded-full bg-fuchsia-900 border-2 border-pink-500 hover:scale-110 transition-transform" title="賽博朋克"></button>
+                <button onclick="setTheme('forest')" class="w-7 h-7 rounded-full bg-emerald-900 border-2 border-emerald-500 hover:scale-110 transition-transform" title="靜謐森林"></button>
+                <button onclick="setTheme('sunset')" class="w-7 h-7 rounded-full bg-amber-900 border-2 border-orange-500 hover:scale-110 transition-transform" title="暖陽夕照"></button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Layout Grid -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+
+            <!-- Left Side Column: Sound Mixer & Presets (7 Cols) -->
+            <section class="lg:col-span-7 flex flex-col gap-6">
+
+                <!-- Ambient Sound Synthesizer Card -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col gap-6 flex-1">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-white/10 pb-4">
+                        <div>
+                            <h2 class="text-lg font-bold flex items-center gap-2">
+                                <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-2v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-2"/></svg>
+                                音效合成與調音台 (Web Audio Synth)
+                            </h2>
+                            <p class="text-xs opacity-70">純前端演算合成自然氛圍音效，無需加載外部音樂檔</p>
+                        </div>
+                        <button id="masterPowerBtn" onclick="toggleMasterPower()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all flex items-center gap-2">
+                            <span id="powerIcon">▶</span> <span id="powerText">開啟音效系統</span>
+                        </button>
+                    </div>
+
+                    <!-- Mood Presets Buttons -->
+                    <div class="flex flex-wrap gap-2">
+                        <span class="text-xs font-semibold self-center opacity-70 mr-1">快速氛圍情境:</span>
+                        <button onclick="applyPreset('focus')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 border border-white/10 transition">🧠 深度專注</button>
+                        <button onclick="applyPreset('rainy')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 border border-white/10 transition">🌧️ 雨夜咖啡館</button>
+                        <button onclick="applyPreset('space')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 border border-white/10 transition">🌌 宇宙沉思</button>
+                        <button onclick="applyPreset('zen')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 border border-white/10 transition">🍃 森林禪意</button>
+                        <button onclick="applyPreset('mute')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition">🔇 全部靜音</button>
+                    </div>
+
+                    <!-- Sound Track Controls Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        
+                        <!-- Rain Track -->
+                        <div class="p-3.5 rounded-xl bg-black/10 border border-white/5 flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-medium flex items-center gap-2">🌧️ 窗外雨聲 (Rain)</span>
+                                <span id="val-rain" class="text-xs font-mono opacity-60">0%</span>
+                            </div>
+                            <input type="range" id="slider-rain" min="0" max="100" value="0" oninput="updateVolume('rain', this.value)" class="w-full">
+                        </div>
+
+                        <!-- Ocean Waves Track -->
+                        <div class="p-3.5 rounded-xl bg-black/10 border border-white/5 flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-medium flex items-center gap-2">🌊 柔和浪潮 (Waves)</span>
+                                <span id="val-waves" class="text-xs font-mono opacity-60">0%</span>
+                            </div>
+                            <input type="range" id="slider-waves" min="0" max="100" value="0" oninput="updateVolume('waves', this.value)" class="w-full">
+                        </div>
+
+                        <!-- Gentle Wind Track -->
+                        <div class="p-3.5 rounded-xl bg-black/10 border border-white/5 flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-medium flex items-center gap-2">🍃 山谷清風 (Wind)</span>
+                                <span id="val-wind" class="text-xs font-mono opacity-60">0%</span>
+                            </div>
+                            <input type="range" id="slider-wind" min="0" max="100" value="0" oninput="updateVolume('wind', this.value)" class="w-full">
+                        </div>
+
+                        <!-- Pink/White Noise Track -->
+                        <div class="p-3.5 rounded-xl bg-black/10 border border-white/5 flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-medium flex items-center gap-2">📻 遮噪粉紅噪聲 (Pink Noise)</span>
+                                <span id="val-noise" class="text-xs font-mono opacity-60">0%</span>
+                            </div>
+                            <input type="range" id="slider-noise" min="0" max="100" value="0" oninput="updateVolume('noise', this.value)" class="w-full">
+                        </div>
+
+                        <!-- Binaural Beats Track -->
+                        <div class="p-3.5 rounded-xl bg-black/10 border border-white/5 flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-medium flex items-center gap-2">🧘 Alpha雙耳節律 (40Hz Beats)</span>
+                                <span id="val-binaural" class="text-xs font-mono opacity-60">0%</span>
+                            </div>
+                            <input type="range" id="slider-binaural" min="0" max="100" value="0" oninput="updateVolume('binaural', this.value)" class="w-full">
+                        </div>
+
+                        <!-- Ambient Pad Chords -->
+                        <div class="p-3.5 rounded-xl bg-black/10 border border-white/5 flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-medium flex items-center gap-2">✨ 宇宙靜謐弦音 (Warm Pad)</span>
+                                <span id="val-pad" class="text-xs font-mono opacity-60">0%</span>
+                            </div>
+                            <input type="range" id="slider-pad" min="0" max="100" value="0" oninput="updateVolume('pad', this.value)" class="w-full">
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Box Breathing Guide Card -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div class="flex flex-col gap-2 max-w-sm">
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            四角箱式呼吸引導 (Box Breathing)
+                        </h2>
+                        <p class="text-xs opacity-70">進入專注狀態前，跟隨圓圈節奏進行 4-4-4-4 呼吸調息，平復焦慮與雜念。</p>
+                        <div class="flex items-center gap-3 mt-2">
+                            <button id="breathBtn" onclick="toggleBreathing()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">
+                                開始引導呼吸
+                            </button>
+                            <span id="breathText" class="text-xs font-bold text-indigo-400">準備就緒</span>
+                        </div>
+                    </div>
+
+                    <!-- Visual Expanding Circle -->
+                    <div class="relative w-32 h-32 flex items-center justify-center">
+                        <div class="absolute inset-0 rounded-full border border-indigo-500/20"></div>
+                        <div id="breathCircle" class="breath-circle w-12 h-12 rounded-full bg-indigo-500/40 border-2 border-indigo-400 flex items-center justify-center shadow-lg">
+                            <span id="breathTimerNum" class="text-xs font-mono font-bold">4</span>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Right Side Column: Pomodoro & Tasks (5 Cols) -->
+            <section class="lg:col-span-5 flex flex-col gap-6">
+
+                <!-- Pomodoro / Focus Timer Card -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-6">
+                    <div class="w-full flex justify-between items-center border-b border-white/10 pb-3">
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            番茄鐘專注計時器
+                        </h2>
+                        <span id="sessionBadge" class="text-xs px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 font-medium border border-indigo-500/30">專注模式</span>
+                    </div>
+
+                    <!-- Circular Timer Display -->
+                    <div class="relative w-56 h-56 flex items-center justify-center my-2">
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                            <!-- Background Circle Track -->
+                            <circle cx="50" cy="50" r="44" stroke="currentColor" stroke-width="6" class="text-white/10" fill="transparent"/>
+                            <!-- Dynamic Progress Circle -->
+                            <circle id="timerProgress" cx="50" cy="50" r="44" stroke="currentColor" stroke-width="6" class="text-indigo-500 transition-all duration-1000 ease-linear" fill="transparent" stroke-dasharray="276.46" stroke-dashoffset="0" stroke-linecap="round"/>
+                        </svg>
+                        <div class="absolute flex flex-col items-center">
+                            <span id="timeDisplay" class="text-4xl font-extrabold tracking-wider font-mono">25:00</span>
+                            <span id="timerStatus" class="text-xs opacity-60 mt-1">點擊開始專注</span>
+                        </div>
+                    </div>
+
+                    <!-- Timer Preset Modes Buttons -->
+                    <div class="flex gap-2">
+                        <button onclick="setTimerMode(25, '專注')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 transition">25分鐘 專注</button>
+                        <button onclick="setTimerMode(5, '短暫休息')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 transition">5分鐘 短休</button>
+                        <button onclick="setTimerMode(15, '長休')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 transition">15分鐘 長休</button>
+                    </div>
+
+                    <!-- Timer Play/Pause/Reset Controls -->
+                    <div class="flex items-center gap-4 w-full max-w-xs">
+                        <button id="timerToggleBtn" onclick="toggleTimer()" class="flex-1 py-3 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition transform active:scale-95">
+                            開始專注
+                        </button>
+                        <button onclick="resetTimer()" class="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition border border-white/10" title="重置計時">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Completion Settings -->
+                    <div class="flex items-center gap-2 text-xs opacity-80 pt-2 border-t border-white/10 w-full justify-center">
+                        <input type="checkbox" id="fadeAudioCheck" checked class="rounded accent-indigo-500">
+                        <label for="fadeAudioCheck" class="cursor-pointer">計時結束時自動漸淡關閉音效</label>
+                    </div>
+                </div>
+
+                <!-- Daily Intentions & Task Scratchpad -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col gap-4 flex-1">
+                    <div class="flex justify-between items-center border-b border-white/10 pb-3">
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            <svg class="w-5 h-5 text-fuchsia-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            今日核心專注目標 (3 Task Intentions)
+                        </h2>
+                        <span id="completedCount" class="text-xs px-2 py-0.5 rounded bg-white/10 font-mono">0/3</span>
+                    </div>
+
+                    <!-- Input Box -->
+                    <div class="flex gap-2">
+                        <input type="text" id="taskInput" placeholder="寫下今天的核心任務..." class="flex-1 px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-indigo-500 transition">
+                        <button onclick="addTask()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold text-white transition">新增</button>
+                    </div>
+
+                    <!-- Task Items List -->
+                    <ul id="taskList" class="flex flex-col gap-2 overflow-y-auto max-h-48 pr-1">
+                        <!-- Dynamic items rendered via JS -->
+                    </ul>
+                </div>
+
+            </section>
+
+        </main>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="fixed bottom-6 right-6 px-4 py-3 rounded-xl bg-slate-800 text-white shadow-2xl border border-white/20 transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+            <span id="toastIcon">🔔</span>
+            <span id="toastMsg" class="text-sm font-medium">通知訊息</span>
+        </div>
+
+    </div>
+
+    <!-- Application JavaScript Code -->
+    <script>
+        /* ==========================================
+           1. Web Audio Synthesizer Engine
+           ========================================== */
+        let audioCtx = null;
+        let isMasterOn = false;
+        const tracks = {};
+
+        function initAudioContext() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Noise Generator Helper (Pink/White)
+        function createNoiseBuffer(type = 'pink') {
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = buffer.getChannelData(0);
+            
+            if (type === 'white') {
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+            } else { // Pink noise algorithm
+                let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    let white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522;
+                    b5 = -0.7616 * b5 - white * 0.0168980;
+                    output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                    output[i] *= 0.11;
+                    b6 = white * 0.115926;
+                }
+            }
+            return buffer;
+        }
+
+        // Sound Track Generators
+        function setupAudioTracks() {
+            if (tracks.rain) return;
+
+            // 1. Rain Synthesizer (Filtered Noise)
+            const rainBuffer = createNoiseBuffer('pink');
+            const rainSource = audioCtx.createBufferSource();
+            rainSource.buffer = rainBuffer;
+            rainSource.loop = true;
+
+            const rainFilter = audioCtx.createBiquadFilter();
+            rainFilter.type = 'lowpass';
+            rainFilter.frequency.value = 1200;
+
+            const rainGain = audioCtx.createGain();
+            rainGain.gain.value = 0;
+
+            rainSource.connect(rainFilter);
+            rainFilter.connect(rainGain);
+            rainGain.connect(audioCtx.destination);
+            rainSource.start();
+
+            tracks.rain = { gain: rainGain, source: rainSource, val: 0 };
+
+            // 2. Ocean Waves Synthesizer (LFO modulated filter)
+            const waveBuffer = createNoiseBuffer('pink');
+            const waveSource = audioCtx.createBufferSource();
+            waveSource.buffer = waveBuffer;
+            waveSource.loop = true;
+
+            const waveFilter = audioCtx.createBiquadFilter();
+            waveFilter.type = 'lowpass';
+            waveFilter.frequency.value = 400;
+
+            // LFO for wave swelling
+            const lfo = audioCtx.createOscillator();
+            lfo.frequency.value = 0.12; // wave speed
+            const lfoGain = audioCtx.createGain();
+            lfoGain.gain.value = 300;
+
+            lfo.connect(lfoGain);
+            lfoGain.connect(waveFilter.frequency);
+            lfo.start();
+
+            const waveGain = audioCtx.createGain();
+            waveGain.gain.value = 0;
+
+            waveSource.connect(waveFilter);
+            waveFilter.connect(waveGain);
+            waveGain.connect(audioCtx.destination);
+            waveSource.start();
+
+            tracks.waves = { gain: waveGain, source: waveSource, val: 0 };
+
+            // 3. Gentle Wind
+            const windBuffer = createNoiseBuffer('white');
+            const windSource = audioCtx.createBufferSource();
+            windSource.buffer = windBuffer;
+            windSource.loop = true;
+
+            const windFilter = audioCtx.createBiquadFilter();
+            windFilter.type = 'bandpass';
+            windFilter.frequency.value = 500;
+            windFilter.Q.value = 3.0;
+
+            const windLfo = audioCtx.createOscillator();
+            windLfo.frequency.value = 0.2;
+            const windLfoGain = audioCtx.createGain();
+            windLfoGain.gain.value = 250;
+
+            windLfo.connect(windLfoGain);
+            windLfoGain.connect(windFilter.frequency);
+            windLfo.start();
+
+            const windGain = audioCtx.createGain();
+            windGain.gain.value = 0;
+
+            windSource.connect(windFilter);
+            windFilter.connect(windGain);
+            windGain.connect(audioCtx.destination);
+            windSource.start();
+
+            tracks.wind = { gain: windGain, source: windSource, val: 0 };
+
+            // 4. Pink Noise
+            const noiseBuffer = createNoiseBuffer('pink');
+            const noiseSource = audioCtx.createBufferSource();
+            noiseSource.buffer = noiseBuffer;
+            noiseSource.loop = true;
+
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.value = 0;
+
+            noiseSource.connect(noiseGain);
+            noiseGain.connect(audioCtx.destination);
+            noiseSource.start();
+
+            tracks.noise = { gain: noiseGain, source: noiseSource, val: 0 };
+
+            // 5. Binaural Beats (40Hz Focus Alpha/Gamma)
+            const oscLeft = audioCtx.createOscillator();
+            const oscRight = audioCtx.createOscillator();
+            const merger = audioCtx.createChannelMerger(2);
+
+            oscLeft.frequency.value = 200; // Base frequency
+            oscRight.frequency.value = 240; // +40Hz binaural beat
+
+            const binGain = audioCtx.createGain();
+            binGain.gain.value = 0;
+
+            oscLeft.connect(merger, 0, 0); // Left ear
+            oscRight.connect(merger, 0, 1); // Right ear
+            merger.connect(binGain);
+            binGain.connect(audioCtx.destination);
+
+            oscLeft.start();
+            oscRight.start();
+
+            tracks.binaural = { gain: binGain, val: 0 };
+
+            // 6. Warm Ambient Pad (C-Maj7 Ambient Chord)
+            const freqs = [130.81, 164.81, 196.00, 246.94]; // C3, E3, G3, B3
+            const padGain = audioCtx.createGain();
+            padGain.gain.value = 0;
+
+            freqs.forEach(f => {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = f;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 600;
+
+                osc.connect(filter);
+                filter.connect(padGain);
+                osc.start();
+            });
+
+            padGain.connect(audioCtx.destination);
+            tracks.pad = { gain: padGain, val: 0 };
+        }
+
+        function toggleMasterPower() {
+            initAudioContext();
+            setupAudioTracks();
+
+            isMasterOn = !isMasterOn;
+            const btn = document.getElementById('masterPowerBtn');
+            const icon = document.getElementById('powerIcon');
+            const text = document.getElementById('powerText');
+
+            if (isMasterOn) {
+                btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+                btn.classList.add('bg-rose-600', 'hover:bg-rose-500');
+                icon.innerText = '⏸';
+                text.innerText = '關閉音效系統';
+                showToast('🔊 音效引擎已啟動');
+                applyCurrentVolumes();
+            } else {
+                btn.classList.remove('bg-rose-600', 'hover:bg-rose-500');
+                btn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+                icon.innerText = '▶';
+                text.innerText = '開啟音效系統';
+                showToast('🔇 音效已暫停');
+                muteAllAudio();
+            }
+        }
+
+        function updateVolume(type, val) {
+            const vol = parseFloat(val) / 100;
+            document.getElementById(`val-${type}`).innerText = `${val}%`;
+
+            if (tracks[type]) {
+                tracks[type].val = vol;
+                if (isMasterOn) {
+                    tracks[type].gain.gain.setTargetAtTime(vol * 0.3, audioCtx.currentTime, 0.1);
+                }
+            }
+        }
+
+        function applyCurrentVolumes() {
+            Object.keys(tracks).forEach(key => {
+                const sliderVal = document.getElementById(`slider-${key}`).value;
+                const vol = parseFloat(sliderVal) / 100;
+                tracks[key].gain.gain.setTargetAtTime(vol * 0.3, audioCtx.currentTime, 0.1);
+            });
+        }
+
+        function muteAllAudio() {
+            Object.keys(tracks).forEach(key => {
+                if (tracks[key] && tracks[key].gain) {
+                    tracks[key].gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+                }
+            });
+        }
+
+        // Mood Presets
+        const presets = {
+            focus: { rain: 20, waves: 0, wind: 10, noise: 40, binaural: 50, pad: 15 },
+            rainy: { rain: 75, waves: 15, wind: 25, noise: 0, binaural: 0, pad: 10 },
+            space: { rain: 0, waves: 20, wind: 10, noise: 10, binaural: 40, pad: 65 },
+            zen: { rain: 30, waves: 50, wind: 40, noise: 0, binaural: 20, pad: 20 },
+            mute: { rain: 0, waves: 0, wind: 0, noise: 0, binaural: 0, pad: 0 }
+        };
+
+        function applyPreset(presetKey) {
+            if (!isMasterOn && presetKey !== 'mute') {
+                toggleMasterPower();
+            }
+            const preset = presets[presetKey];
+            Object.keys(preset).forEach(key => {
+                const val = preset[key];
+                document.getElementById(`slider-${key}`).value = val;
+                updateVolume(key, val);
+            });
+            showToast(`已載入情境設定`);
+        }
+
+        /* ==========================================
+           2. Pomodoro Timer System
+           ========================================== */
+        let timerSeconds = 25 * 60;
+        let initialSeconds = 25 * 60;
+        let timerInterval = null;
+        let isTimerRunning = false;
+        let timerLabel = "專注";
+
+        const timeDisplay = document.getElementById('timeDisplay');
+        const timerProgress = document.getElementById('timerProgress');
+        const timerToggleBtn = document.getElementById('timerToggleBtn');
+        const timerStatus = document.getElementById('timerStatus');
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(timerSeconds / 60);
+            const secs = timerSeconds % 60;
+            timeDisplay.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+            // Circular progress calculations
+            const totalDash = 276.46;
+            const progress = (initialSeconds - timerSeconds) / initialSeconds;
+            const offset = totalDash - (progress * totalDash);
+            timerProgress.style.strokeDashoffset = offset;
+        }
+
+        function setTimerMode(mins, label) {
+            clearInterval(timerInterval);
+            isTimerRunning = false;
+            timerSeconds = mins * 60;
+            initialSeconds = mins * 60;
+            timerLabel = label;
+            document.getElementById('sessionBadge').innerText = `${label}模式`;
+            timerStatus.innerText = `準備開始 ${label}`;
+            timerToggleBtn.innerText = "開始計時";
+            timerToggleBtn.classList.remove('bg-rose-600', 'hover:bg-rose-500');
+            timerToggleBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-500');
+            updateTimerDisplay();
+        }
+
+        function toggleTimer() {
+            if (isTimerRunning) {
+                // Pause
+                clearInterval(timerInterval);
+                isTimerRunning = false;
+                timerToggleBtn.innerText = "繼續計時";
+                timerStatus.innerText = "計時已暫停";
+                timerToggleBtn.classList.remove('bg-rose-600', 'hover:bg-rose-500');
+                timerToggleBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-500');
+            } else {
+                // Start
+                if (!isMasterOn) {
+                    toggleMasterPower(); // Auto start audio on timer
+                }
+                isTimerRunning = true;
+                timerToggleBtn.innerText = "暫停計時";
+                timerStatus.innerText = `進行中 (${timerLabel})`;
+                timerToggleBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-500');
+                timerToggleBtn.classList.add('bg-rose-600', 'hover:bg-rose-500');
+
+                timerInterval = setInterval(() => {
+                    if (timerSeconds > 0) {
+                        timerSeconds--;
+                        updateTimerDisplay();
+                    } else {
+                        clearInterval(timerInterval);
+                        isTimerRunning = false;
+                        onTimerComplete();
+                    }
+                }, 1000);
+            }
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            isTimerRunning = false;
+            timerSeconds = initialSeconds;
+            timerStatus.innerText = "已重置";
+            timerToggleBtn.innerText = "開始專注";
+            timerToggleBtn.classList.remove('bg-rose-600', 'hover:bg-rose-500');
+            timerToggleBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-500');
+            updateTimerDisplay();
+        }
+
+        function onTimerComplete() {
+            showToast('🎉 時間到！專注階段結束');
+            timerStatus.innerText = "🎉 計時完成！";
+            timerToggleBtn.innerText = "重新開始";
+
+            // Fade audio if option enabled
+            if (document.getElementById('fadeAudioCheck').checked && isMasterOn) {
+                applyPreset('mute');
+                showToast('🔔 已自動漸淡關閉音效');
+            }
+        }
+
+        /* ==========================================
+           3. Box Breathing Guide
+           ========================================== */
+        let isBreathing = false;
+        let breathInterval = null;
+        let breathPhase = 0; // 0: Inhale, 1: Hold, 2: Exhale, 3: Hold
+        let breathCount = 4;
+
+        const breathPhases = [
+            { text: '吸氣 Inhale', scale: 'scale-150', color: 'bg-indigo-500' },
+            { text: '屏息 Hold', scale: 'scale-150', color: 'bg-amber-500' },
+            { text: '呼氣 Exhale', scale: 'scale-75', color: 'bg-emerald-500' },
+            { text: '屏息 Hold', scale: 'scale-75', color: 'bg-blue-500' }
+        ];
+
+        function toggleBreathing() {
+            const circle = document.getElementById('breathCircle');
+            const btn = document.getElementById('breathBtn');
+            const text = document.getElementById('breathText');
+            const numDisplay = document.getElementById('breathTimerNum');
+
+            if (isBreathing) {
+                clearInterval(breathInterval);
+                isBreathing = false;
+                btn.innerText = "開始引導呼吸";
+                text.innerText = "準備就緒";
+                circle.className = "breath-circle w-12 h-12 rounded-full bg-indigo-500/40 border-2 border-indigo-400 flex items-center justify-center shadow-lg transform scale-100";
+                numDisplay.innerText = "4";
+            } else {
+                isBreathing = true;
+                btn.innerText = "停止呼吸引導";
+                breathPhase = 0;
+                breathCount = 4;
+                runBreathingCycle();
+
+                breathInterval = setInterval(() => {
+                    breathCount--;
+                    if (breathCount <= 0) {
+                        breathPhase = (breathPhase + 1) % 4;
+                        breathCount = 4;
+                        runBreathingCycle();
+                    }
+                    numDisplay.innerText = breathCount;
+                }, 1000);
+            }
+        }
+
+        function runBreathingCycle() {
+            const circle = document.getElementById('breathCircle');
+            const text = document.getElementById('breathText');
+            const phase = breathPhases[breathPhase];
+
+            text.innerText = phase.text;
+            circle.className = `breath-circle w-12 h-12 rounded-full ${phase.color} border-2 border-white flex items-center justify-center shadow-lg transform transition-all duration-1000 ${phase.scale}`;
+        }
+
+        /* ==========================================
+           4. Tasks & Local Storage Scratchpad
+           ========================================== */
+        let tasks = JSON.parse(localStorage.getItem('focus_tasks')) || [
+            { id: 1, text: "完成今日核心工作任務", completed: false },
+            { id: 2, text: "閱讀 20 分鐘專注書籍", completed: true }
+        ];
+
+        function saveTasks() {
+            localStorage.setItem('focus_tasks', JSON.stringify(tasks));
+            renderTasks();
+        }
+
+        function renderTasks() {
+            const list = document.getElementById('taskList');
+            list.innerHTML = '';
+
+            let completedCount = 0;
+            tasks.forEach(task => {
+                if (task.completed) completedCount++;
+
+                const li = document.createElement('li');
+                li.className = `flex items-center justify-between p-2.5 rounded-xl bg-black/10 border border-white/5 text-sm transition ${task.completed ? 'opacity-50 line-through' : ''}`;
+                li.innerHTML = `
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask(${task.id})" class="rounded accent-indigo-500 cursor-pointer">
+                        <span class="truncate">${escapeHtml(task.text)}</span>
+                    </div>
+                    <button onclick="deleteTask(${task.id})" class="text-rose-400 hover:text-rose-300 px-2 py-0.5 text-xs opacity-70 hover:opacity-100">✕</button>
+                `;
+                list.appendChild(li);
+            });
+
+            document.getElementById('completedCount').innerText = `${completedCount}/${tasks.length}`;
+        }
+
+        function addTask() {
+            const input = document.getElementById('taskInput');
+            const text = input.value.trim();
+            if (text) {
+                tasks.push({ id: Date.now(), text, completed: false });
+                input.value = '';
+                saveTasks();
+            }
+        }
+
+        function toggleTask(id) {
+            tasks = tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
+            saveTasks();
+        }
+
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            saveTasks();
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        /* ==========================================
+           5. Dynamic Theme Switcher & Toast System
+           ========================================== */
+        function setTheme(themeName) {
+            document.documentElement.setAttribute('data-theme', themeName);
+            localStorage.setItem('focus_theme', themeName);
+            showToast(`切換主題: ${themeName.toUpperCase()}`);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+
+        /* ==========================================
+           6. Background Particle Visualizer Canvas
+           ========================================== */
+        const canvas = document.getElementById('bgCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 3 + 1;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.alpha = Math.random() * 0.5 + 0.1;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+            draw() {
+                ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--particle-color') || 'rgba(99, 102, 241, 0.4)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const count = Math.floor((canvas.width * canvas.height) / 15000);
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animateCanvas);
+        }
+
+        // Initialize Application
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            initParticles();
+        });
+
+        window.onload = function() {
+            resizeCanvas();
+            initParticles();
+            animateCanvas();
+
+            // Restore saved theme
+            const savedTheme = localStorage.getItem('focus_theme') || 'dark';
+            setTheme(savedTheme);
+
+            // Render Task List
+            renderTasks();
+
+            // Initialize Timer
+            updateTimerDisplay();
+        };
+    </script>
+</body>
+</html>
